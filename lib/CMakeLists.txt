@@ -6,7 +6,12 @@ add_mlir_library(WarpForgePasses
   MLIRFuncDialect
   MLIRIR
   MLIRLinalgDialect
+  MLIRLinalgTransforms
   MLIRPass
+  MLIRSCFDialect
+  MLIRSCFTransforms
   MLIRTensorDialect
+  MLIRTilingInterface
   MLIRTransforms
+  MLIRVectorDialect
 )

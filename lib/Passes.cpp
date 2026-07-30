@@ -3,7 +3,9 @@
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
+#include "mlir/Dialect/Linalg/Transforms/Transforms.h"
 #include "mlir/Dialect/Linalg/Utils/Utils.h"
+#include "mlir/Dialect/SCF/Transforms/TileUsingInterface.h"
 #include "mlir/IR/AffineMap.h"
 #include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/BuiltinTypes.h"
@@ -12,7 +14,10 @@
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "mlir/Transforms/Passes.h"
+#include "mlir/Interfaces/TilingInterface.h"
 #include "llvm/ADT/APFloat.h"
+#include "llvm/Support/Format.h"
+#include "llvm/Support/raw_ostream.h"
 
 #include <utility>
 
@@ -172,15 +177,168 @@ public:
   }
 };
 
+class TileAndVectorizePass
+    : public PassWrapper<TileAndVectorizePass,
+                         OperationPass<func::FuncOp>> {
+public:
+  MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(TileAndVectorizePass)
+
+  Option<int64_t> tileM{*this, "tile-m",
+                        llvm::cl::desc("Matmul M tile size"),
+                        llvm::cl::init(16)};
+  Option<int64_t> tileN{*this, "tile-n",
+                        llvm::cl::desc("Matmul N tile size"),
+                        llvm::cl::init(16)};
+  Option<int64_t> tileK{*this, "tile-k",
+                        llvm::cl::desc("Matmul K tile size"),
+                        llvm::cl::init(16)};
+
+  StringRef getArgument() const final {
+    return "warpforge-tile-vectorize";
+  }
+  StringRef getDescription() const final {
+    return "Tile static matmuls with SCF and vectorize the tiled kernels";
+  }
+
+  void runOnOperation() final {
+    if (tileM <= 0 || tileN <= 0 || tileK <= 0) {
+      getOperation().emitError("tile sizes must all be positive");
+      signalPassFailure();
+      return;
+    }
+
+    SmallVector<linalg::MatmulOp> matmuls;
+    getOperation().walk(
+        [&](linalg::MatmulOp matmul) { matmuls.push_back(matmul); });
+
+    IRRewriter rewriter(&getContext());
+    for (linalg::MatmulOp matmul : matmuls) {
+      auto lhsType =
+          dyn_cast<RankedTensorType>(matmul->getOperand(0).getType());
+      auto rhsType =
+          dyn_cast<RankedTensorType>(matmul->getOperand(1).getType());
+      if (!lhsType || !rhsType || lhsType.getRank() != 2 ||
+          rhsType.getRank() != 2 || !lhsType.hasStaticShape() ||
+          !rhsType.hasStaticShape()) {
+        matmul.emitOpError()
+            << "requires static rank-2 tensor semantics; run "
+               "--warpforge-verify-inference first";
+        signalPassFailure();
+        return;
+      }
+
+      int64_t m = lhsType.getDimSize(0);
+      int64_t k = lhsType.getDimSize(1);
+      int64_t n = rhsType.getDimSize(1);
+      if (m % tileM != 0 || n % tileN != 0 || k % tileK != 0) {
+        matmul.emitOpError()
+            << "shape " << m << "x" << k << " * " << k << "x" << n
+            << " is not divisible by tile sizes " << tileM << "x" << tileN
+            << "x" << tileK
+            << "; pad or select explicit divisors to avoid masked tails";
+        signalPassFailure();
+        return;
+      }
+
+      rewriter.setInsertionPoint(matmul);
+      SmallVector<OpFoldResult> tileSizes{
+          rewriter.getIndexAttr(tileM), rewriter.getIndexAttr(tileN),
+          rewriter.getIndexAttr(tileK)};
+      scf::SCFTilingOptions options;
+      options.setTileSizes(tileSizes);
+      FailureOr<scf::SCFTilingResult> tiled = scf::tileUsingSCF(
+          rewriter, cast<TilingInterface>(matmul.getOperation()), options);
+      if (failed(tiled)) {
+        matmul.emitOpError("SCF tiling failed for this operation");
+        signalPassFailure();
+        return;
+      }
+
+      rewriter.replaceOp(matmul, tiled->replacements);
+      SmallVector<int64_t> vectorSizes{tileM, tileN, tileK};
+      for (Operation *tiledOperation : tiled->tiledOps) {
+        if (!isa<linalg::LinalgOp>(tiledOperation))
+          continue;
+        rewriter.setInsertionPoint(tiledOperation);
+        if (failed(linalg::vectorize(rewriter, tiledOperation, vectorSizes))) {
+          tiledOperation->emitError(
+              "Linalg vectorization failed after successful SCF tiling");
+          signalPassFailure();
+          return;
+        }
+      }
+    }
+  }
+};
+
+class RooflineAnalysisPass
+    : public PassWrapper<RooflineAnalysisPass,
+                         OperationPass<func::FuncOp>> {
+public:
+  MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(RooflineAnalysisPass)
+
+  StringRef getArgument() const final { return "warpforge-roofline"; }
+  StringRef getDescription() const final {
+    return "Report static matmul FLOPs, tensor bytes, and arithmetic intensity";
+  }
+  void runOnOperation() final {
+    StringRef functionName = getOperation().getSymName();
+    getOperation().walk([&](linalg::MatmulOp matmul) {
+      auto lhsType =
+          dyn_cast<RankedTensorType>(matmul->getOperand(0).getType());
+      auto rhsType =
+          dyn_cast<RankedTensorType>(matmul->getOperand(1).getType());
+      auto resultType = dyn_cast<RankedTensorType>(matmul.getResult(0).getType());
+      if (!lhsType || !rhsType || !resultType || !lhsType.hasStaticShape() ||
+          !rhsType.hasStaticShape() || !resultType.hasStaticShape())
+        return;
+
+      auto elementType = dyn_cast<FloatType>(lhsType.getElementType());
+      if (!elementType)
+        return;
+
+      uint64_t m = lhsType.getDimSize(0);
+      uint64_t k = lhsType.getDimSize(1);
+      uint64_t n = rhsType.getDimSize(1);
+      uint64_t flops = 2 * m * n * k;
+      uint64_t elementBytes = elementType.getWidth() / 8;
+      uint64_t bytes = elementBytes * (m * k + k * n + 2 * m * n);
+      double intensity = static_cast<double>(flops) / bytes;
+
+      llvm::errs() << "[warpforge-roofline] function=" << functionName
+                   << " op=linalg.matmul shape=" << m << "x" << n << "x" << k
+                   << " flops=" << flops << " bytes=" << bytes
+                   << " intensity=" << llvm::format("%.3f", intensity)
+                   << " flop/byte\n";
+    });
+  }
+};
+
 } // namespace
 
 void registerWarpForgePasses() {
   PassRegistration<VerifyInferencePass>();
   PassRegistration<FuseMatmulEpiloguePass>();
+  PassRegistration<TileAndVectorizePass>();
+  PassRegistration<RooflineAnalysisPass>();
   PassPipelineRegistration<>(
       "warpforge-simplify",
       "Run canonical folding and common-subexpression elimination",
       [](OpPassManager &manager) {
+        manager.addNestedPass<func::FuncOp>(createCanonicalizerPass());
+        manager.addNestedPass<func::FuncOp>(createCSEPass());
+      });
+  PassPipelineRegistration<>(
+      "warpforge-inference-opt",
+      "Verify, fuse, simplify, tile, and vectorize static inference matmuls",
+      [](OpPassManager &manager) {
+        manager.addNestedPass<func::FuncOp>(
+            std::make_unique<VerifyInferencePass>());
+        manager.addNestedPass<func::FuncOp>(
+            std::make_unique<FuseMatmulEpiloguePass>());
+        manager.addNestedPass<func::FuncOp>(createCanonicalizerPass());
+        manager.addNestedPass<func::FuncOp>(
+            std::make_unique<TileAndVectorizePass>());
         manager.addNestedPass<func::FuncOp>(createCanonicalizerPass());
         manager.addNestedPass<func::FuncOp>(createCSEPass());
       });
