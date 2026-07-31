@@ -1,0 +1,21 @@
+{
+  "model": {
+    "arithmetic_intensity_flop_per_byte": 8.0,
+    "flops": 524288,
+    "minimum_tensor_bytes": 65536
+  },
+  "operation_delta": {
+    "linalg.add": -1,
+    "linalg.generic": 1,
+    "linalg.matmul": 0,
+    "linalg.max": -1
+  },
+  "runtime_measurement": null,
+  "workload": {
+    "dtype": "f32",
+    "k": 64,
+    "m": 64,
+    "n": 64,
+    "tile": 16
+  }
+}
