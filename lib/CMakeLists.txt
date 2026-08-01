@@ -15,3 +15,12 @@ add_mlir_library(WarpForgePasses
   MLIRTransforms
   MLIRVectorDialect
 )
+
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+  target_compile_options(WarpForgePasses PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
+    -Werror
+  )
+endif()
