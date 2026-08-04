@@ -6,6 +6,7 @@
 #include "mlir/Dialect/Linalg/Transforms/Transforms.h"
 #include "mlir/Dialect/Linalg/Utils/Utils.h"
 #include "mlir/Dialect/SCF/Transforms/TileUsingInterface.h"
+#include "mlir/Dialect/Vector/IR/VectorOps.h"
 #include "mlir/IR/AffineMap.h"
 #include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/BuiltinTypes.h"
@@ -207,6 +208,10 @@ public:
   }
   StringRef getDescription() const final {
     return "Tile static matmuls with SCF and vectorize the tiled kernels";
+  }
+
+  void getDependentDialects(DialectRegistry &registry) const final {
+    registry.insert<vector::VectorDialect>();
   }
 
   void runOnOperation() final {
