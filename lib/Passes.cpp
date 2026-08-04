@@ -172,7 +172,8 @@ public:
   void runOnOperation() final {
     RewritePatternSet patterns(&getContext());
     patterns.add<FuseBiasReluPattern>(&getContext());
-    if (failed(applyPatternsGreedily(getOperation(), std::move(patterns))))
+    if (failed(
+            applyPatternsAndFoldGreedily(getOperation(), std::move(patterns))))
       signalPassFailure();
   }
 };
@@ -182,6 +183,14 @@ class TileAndVectorizePass
                          OperationPass<func::FuncOp>> {
 public:
   MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(TileAndVectorizePass)
+
+  TileAndVectorizePass() = default;
+  TileAndVectorizePass(const TileAndVectorizePass &other)
+      : TileAndVectorizePass() {
+    tileM = static_cast<int64_t>(other.tileM);
+    tileN = static_cast<int64_t>(other.tileN);
+    tileK = static_cast<int64_t>(other.tileK);
+  }
 
   Option<int64_t> tileM{*this, "tile-m",
                         llvm::cl::desc("Matmul M tile size"),
