@@ -269,12 +269,11 @@ public:
       }
 
       rewriter.replaceOp(matmul, tiled->replacements);
-      SmallVector<int64_t> vectorSizes{tileM, tileN, tileK};
       for (Operation *tiledOperation : tiled->tiledOps) {
         if (!isa<linalg::LinalgOp>(tiledOperation))
           continue;
         rewriter.setInsertionPoint(tiledOperation);
-        if (failed(linalg::vectorize(rewriter, tiledOperation, vectorSizes))) {
+        if (failed(linalg::vectorize(rewriter, tiledOperation))) {
           tiledOperation->emitError(
               "Linalg vectorization failed after successful SCF tiling");
           signalPassFailure();
