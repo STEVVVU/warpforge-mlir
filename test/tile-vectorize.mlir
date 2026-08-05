@@ -13,6 +13,6 @@ func.func @tile_and_vectorize(
 // CHECK-LABEL: func.func @tile_and_vectorize
 // CHECK: scf.for
 // CHECK: vector.transfer_read
-// CHECK: vector.contract
+// CHECK: vector.multi_reduction
 // CHECK: vector.transfer_write
 // CHECK-NOT: linalg.matmul
