@@ -78,10 +78,10 @@ regenerates a full record containing tool version, exact operation counts, and
 pre/post IR SHA-256 hashes. No runtime measurement is included.
 
 The test surface contains 10 lit/FileCheck fixtures and 4 Python unit tests.
-On this checkout, the Python tests pass. A local CMake configure identified
-Clang 19.1.7 but could not link its compiler probe against the extracted
-Ubuntu sysroot, so C++ compilation and lit execution remain deferred to the
-pinned Ubuntu CI job. See the
+The pinned Ubuntu CI job builds the C++ driver with Clang 19, runs all 10 lit
+fixtures and 4 Python tests, and regenerates the deterministic pipeline
+evidence. A local Windows CMake configure identified Clang 19.1.7 but could not
+link its compiler probe against the extracted Ubuntu sysroot; see the
 [local verification record](evidence/LOCAL_VERIFICATION.md).
 
 ## Lowering scope
