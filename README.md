@@ -1,9 +1,8 @@
-# WarpForge MLIR
+# MLIR Compiler Optimizer
 
-WarpForge is an out-of-tree LLVM/MLIR 19 compiler project for static AI
-inference kernels. It uses the official C++ pass, rewrite, TilingInterface,
-Linalg vectorization, LLVM conversion, and NVVM dialect APIs. It does not
-implement a substitute IR or parser.
+An LLVM/MLIR compiler optimizer for neural-network workloads. It adds graph
+fusion, tiling, vectorization, validation, and progressive lowering using the
+standard MLIR toolchain.
 
 The project builds `warpforge-opt`, an `mlir-opt`-style driver that accepts
 standard MLIR and adds:
