@@ -5,7 +5,7 @@ description: Build and drive the WarpForge optimizer CLI and retain transformati
 
 # Verify WarpForge
 
-Status: draft until its full procedure runs on the supported Ubuntu 24.04 LLVM/MLIR 19 toolchain. Use a clean checkout and follow the package installation in `.github/workflows/ci.yml`.
+Proven on Ubuntu 24.04 with LLVM/MLIR 19.1.7 in hosted run [41414021411](https://github.com/STEVVVU/warpforge-mlir/actions/runs/41414021411), source `11cc18d1b58f33f681346d255c31ac5e4472e283`. The built CLI, positive and rejected fixtures, FileCheck, successful-output reparsing, observed pipeline IR and identity receipts passed. The downloaded artifact retained those outputs after job completion. Use a clean checkout and follow the package installation in `.github/workflows/ci.yml`. This proves the mapped transformations, not numerical equivalence or runtime speed.
 
 ## Launch
 

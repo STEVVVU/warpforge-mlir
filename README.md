@@ -77,6 +77,10 @@ regenerates a full record containing tool version, exact operation counts, and
 pre/post IR SHA-256 hashes. No runtime measurement is included.
 
 The test surface contains 10 lit/FileCheck fixtures and 7 Python unit tests.
+The [November 2 hosted verification](evidence/HOSTED_VERIFICATION_20261102.md)
+records the actual executed transformation and rejection paths, retained IR,
+and numeric-diagnostic regression. These checks establish structural behavior,
+not a runtime speedup.
 The Ubuntu CI job builds the C++ driver with Clang 19, runs the test suites,
 and is configured to retain deterministic pipeline evidence and verification output
 as a `warpforge-evidence` artifact. The verification driver records the source
