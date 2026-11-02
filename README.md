@@ -76,10 +76,13 @@ These expectations are checked in
 regenerates a full record containing tool version, exact operation counts, and
 pre/post IR SHA-256 hashes. No runtime measurement is included.
 
-The test surface contains 10 lit/FileCheck fixtures and 4 Python unit tests.
-The pinned Ubuntu CI job builds the C++ driver with Clang 19, runs all 10 lit
-fixtures and 4 Python tests, and regenerates the deterministic pipeline
-evidence. A local Windows CMake configure identified Clang 19.1.7 but could not
+The test surface contains 10 lit/FileCheck fixtures and 7 Python unit tests.
+The Ubuntu CI job builds the C++ driver with Clang 19, runs the test suites,
+and is configured to retain deterministic pipeline evidence and verification output
+as a `warpforge-evidence` artifact. The verification driver records the source
+revision, working-tree status, binary hash, version, commands, exit codes, IR,
+and diagnostics. Its procedure and feature map are in
+`.agents/skills/verify-warpforge/`. A local Windows CMake configure identified Clang 19.1.7 but could not
 link its compiler probe against the extracted Ubuntu sysroot; see the
 [local verification record](evidence/LOCAL_VERIFICATION.md).
 
@@ -107,7 +110,7 @@ Current limitations:
 - Implemented deterministic matmul analysis and transformation evidence: the
   64x64x64 f32 fixture models 524,288 FLOPs and 65,536 minimum tensor bytes,
   while fusion removes two named epilogue ops and introduces one generic op.
-- Added 10 lit/FileCheck fixtures, 4 Python tests, warnings-as-errors builds,
+- Added 10 lit/FileCheck fixtures, Python tests, warnings-as-errors builds,
   actionable failure diagnostics, and Ubuntu CI pinned to distro LLVM/MLIR 19.
 
 ## License
