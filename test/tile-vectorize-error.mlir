@@ -10,5 +10,5 @@ func.func @tail_requires_policy(
   return %result : tensor<31x16xf32>
 }
 
-// CHECK: error: 'linalg.matmul' op shape 31x16 * 16x16 is not divisible
+// CHECK: error: 'linalg.matmul' op shape 31x16 * 16x16 is not divisible by tile sizes 16x16x16
 // CHECK-SAME: pad or select explicit divisors to avoid masked tails

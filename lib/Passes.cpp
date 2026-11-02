@@ -247,8 +247,9 @@ public:
       if (m % tileM != 0 || n % tileN != 0 || k % tileK != 0) {
         matmul.emitOpError()
             << "shape " << m << "x" << k << " * " << k << "x" << n
-            << " is not divisible by tile sizes " << tileM << "x" << tileN
-            << "x" << tileK
+            << " is not divisible by tile sizes " << static_cast<int64_t>(tileM)
+            << "x" << static_cast<int64_t>(tileN) << "x"
+            << static_cast<int64_t>(tileK)
             << "; pad or select explicit divisors to avoid masked tails";
         signalPassFailure();
         return;
